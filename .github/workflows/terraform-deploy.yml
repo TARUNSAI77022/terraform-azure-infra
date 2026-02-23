@@ -50,21 +50,35 @@ jobs:
           creds: '{"clientId":"${{ secrets.AZURE_CLIENT_ID }}","clientSecret":"${{ secrets.AZURE_CLIENT_SECRET }}","subscriptionId":"${{ secrets.AZURE_SUBSCRIPTION_ID }}","tenantId":"${{ secrets.AZURE_TENANT_ID }}"}'
 
       - name: Ensure Backend Storage Exists
+        env:
+          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
         run: |
+          # Clean up any accidental spaces from secrets
+          SUB_ID=$(echo "$ARM_SUBSCRIPTION_ID" | tr -d '[:space:]' | tr -d '"' | tr -d "'")
+          
+          az account set --subscription "$SUB_ID"
+          
           RESOURCE_GROUP_NAME="rg-terraform-state"
-          STORAGE_ACCOUNT_NAME="tfstatergtestdev123"
+          # Adding a random string based on github.run_id to ensure a globally unique storage account name
+          STORAGE_ACCOUNT_NAME="tfstatetestdev${{ github.run_id }}"
+          # Limit characters to 24
+          STORAGE_ACCOUNT_NAME=${STORAGE_ACCOUNT_NAME:0:24}
           CONTAINER_NAME="tfstate"
           LOCATION="South India"
 
-          # Check if storage account exists, if not create it
+          echo "Using Storage Account Name: $STORAGE_ACCOUNT_NAME"
+
           if ! az storage account show --name $STORAGE_ACCOUNT_NAME --resource-group $RESOURCE_GROUP_NAME &>/dev/null; then
-            echo "Storage account not found. Creating resource group and storage account..."
+            echo "Storage account not found. Creating..."
             az group create --name $RESOURCE_GROUP_NAME --location "$LOCATION"
             az storage account create --name $STORAGE_ACCOUNT_NAME --resource-group $RESOURCE_GROUP_NAME --location "$LOCATION" --sku Standard_LRS --allow-blob-public-access false
             az storage container create --name $CONTAINER_NAME --account-name $STORAGE_ACCOUNT_NAME --auth-mode login
           else
             echo "Backend storage account already exists."
           fi
+
+          # Update the backend.tf dynamically to match the newly generated unique storage account name
+          sed -i "s/storage_account_name = \".*\"/storage_account_name = \"$STORAGE_ACCOUNT_NAME\"/g" backend.tf
 
       - name: Terraform Init
         id: init
