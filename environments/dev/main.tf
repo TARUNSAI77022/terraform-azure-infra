@@ -24,7 +24,7 @@ resource "tls_private_key" "vm_ssh" {
 module "resource_group" {
   source   = "../../modules/resource-group"
   name     = "rg-test-dev-infra"
-  location = "South India"
+  location = "East US"
 }
 
 module "vnet" {
