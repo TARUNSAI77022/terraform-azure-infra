@@ -64,15 +64,19 @@ jobs:
           # Limit characters to 24
           STORAGE_ACCOUNT_NAME=${STORAGE_ACCOUNT_NAME:0:24}
           CONTAINER_NAME="tfstate"
-          LOCATION="South India"
+          LOCATION="southindia"
 
           echo "Using Storage Account Name: $STORAGE_ACCOUNT_NAME"
 
-          if ! az storage account show --name $STORAGE_ACCOUNT_NAME --resource-group $RESOURCE_GROUP_NAME &>/dev/null; then
+          if ! az storage account show --name $STORAGE_ACCOUNT_NAME --resource-group $RESOURCE_GROUP_NAME --subscription "$SUB_ID" &>/dev/null; then
             echo "Storage account not found. Creating..."
-            az group create --name $RESOURCE_GROUP_NAME --location "$LOCATION"
-            az storage account create --name $STORAGE_ACCOUNT_NAME --resource-group $RESOURCE_GROUP_NAME --location "$LOCATION" --sku Standard_LRS --allow-blob-public-access false
-            az storage container create --name $CONTAINER_NAME --account-name $STORAGE_ACCOUNT_NAME --auth-mode login
+            az group create --name $RESOURCE_GROUP_NAME --location "$LOCATION" --subscription "$SUB_ID"
+            az storage account create --name $STORAGE_ACCOUNT_NAME --resource-group $RESOURCE_GROUP_NAME --location "$LOCATION" --sku Standard_LRS --allow-blob-public-access false --subscription "$SUB_ID"
+            
+            # Wait for storage account to be fully provisioned
+            sleep 30
+            
+            az storage container create --name $CONTAINER_NAME --account-name $STORAGE_ACCOUNT_NAME --auth-mode login --subscription "$SUB_ID"
           else
             echo "Backend storage account already exists."
           fi
