@@ -44,27 +44,44 @@ jobs:
         run: terraform fmt -check
         continue-on-error: true
 
-      - name: Deploy Bootstrap (Storage Backend)
+      - name: Azure CLI Login
+        uses: azure/login@v1
+        with:
+          creds: '{"clientId":"${{ secrets.AZURE_CLIENT_ID }}","clientSecret":"${{ secrets.AZURE_CLIENT_SECRET }}","subscriptionId":"${{ secrets.AZURE_SUBSCRIPTION_ID }}","tenantId":"${{ secrets.AZURE_TENANT_ID }}"}'
+
+      - name: Ensure Backend Storage Exists
         run: |
-          # The GitHub action runner can occasionally break parsing secrets if they contain trailing spaces or invisible characters from a UI copy/paste
-          # we sanitize these before passing them to terraform to avoid random 'SubscriptionNotFound' errors
-          export ARM_CLIENT_ID=$(echo -n "$ARM_CLIENT_ID" | tr -d '[:space:]"')
-          export ARM_CLIENT_SECRET=$(echo -n "$ARM_CLIENT_SECRET" | tr -d '[:space:]"')
-          export ARM_SUBSCRIPTION_ID=$(echo -n "$ARM_SUBSCRIPTION_ID" | tr -d '[:space:]"')
-          export ARM_TENANT_ID=$(echo -n "$ARM_TENANT_ID" | tr -d '[:space:]"')
+          RESOURCE_GROUP_NAME="rg-terraform-state"
+          STORAGE_ACCOUNT_NAME="tfstatetestdev${{ github.run_id }}"
+          STORAGE_ACCOUNT_NAME=${STORAGE_ACCOUNT_NAME:0:24}
+          CONTAINER_NAME="tfstate"
+          LOCATION="southindia"
+
+          echo "Using Storage Account Name: $STORAGE_ACCOUNT_NAME"
+
+          # 1. Always ensure Resource Group exists
+          if [ $(az group exists --name $RESOURCE_GROUP_NAME) == 'false' ]; then
+            echo "Creating resource group $RESOURCE_GROUP_NAME..."
+            az group create --name $RESOURCE_GROUP_NAME --location "$LOCATION"
+          else
+            echo "Resource group $RESOURCE_GROUP_NAME already exists!"
+          fi
           
-          # Initialize and apply the bootstrap terraform code locally to create the backend storage
-          cd ../bootstrap
-          terraform init
-          terraform apply -auto-approve
+          # 2. Check if the specific storage account is already taken
+          AVAILABLE=$(az storage account check-name --name $STORAGE_ACCOUNT_NAME --query "nameAvailable" -o tsv)
           
-          # Tell terraform to output the randomly generated storage account name and save it
-          SA_NAME=$(terraform output -raw storage_account_name)
-          echo "Determined Storage Account Name: $SA_NAME"
-          
-          # Navigate back to the main environment and inject the exact storage account name
-          cd ../dev
-          sed -i "s/storage_account_name = \".*\"/storage_account_name = \"$SA_NAME\"/g" backend.tf
+          if [ "$AVAILABLE" == "true" ]; then
+            echo "Storage account name is available. Creating..."
+            az storage account create --name $STORAGE_ACCOUNT_NAME --resource-group $RESOURCE_GROUP_NAME --location "$LOCATION" --sku Standard_LRS --allow-blob-public-access false
+            echo "Waiting for storage account to be ready..."
+            sleep 20
+            az storage container create --name $CONTAINER_NAME --account-name $STORAGE_ACCOUNT_NAME --auth-mode login
+          else
+            echo "Storage account already exists."
+          fi
+
+          # 3. Update Terraform backend configuration
+          sed -i "s/storage_account_name = \".*\"/storage_account_name = \"$STORAGE_ACCOUNT_NAME\"/g" backend.tf
 
       - name: Terraform Init
         id: init
