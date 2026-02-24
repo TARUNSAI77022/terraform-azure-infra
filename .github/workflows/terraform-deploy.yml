@@ -141,6 +141,13 @@ jobs:
                  terraform import module.nsg.azurerm_network_security_group.nsg $NSG_ID
              fi
           fi
+          
+          echo "Syncing NSG Association..."
+          if ! terraform state list | grep -q "azurerm_subnet_network_security_group_association.nsg_assoc"; then
+              echo "Importing NSG Association into state..."
+              # The association ID tracks against the Subnet ID in Azure
+              terraform import azurerm_subnet_network_security_group_association.nsg_assoc $SNET_ID || true
+          fi
 
       - name: Terraform Plan
         id: plan
