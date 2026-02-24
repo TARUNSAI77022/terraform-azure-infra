@@ -91,6 +91,57 @@ jobs:
         id: validate
         run: terraform validate -no-color
 
+      - name: Terraform State Drift Recovery
+        run: |
+          # Sometimes Azure objects are created but the Terraform state file doesn't know about them due to previous failures.
+          # We need to detect these abandoned resources and gently bring them back into Terraform's warm embrace.
+          
+          # Initialize some helper variables dynamically
+          SUB_ID=$(az account show --query id -o tsv)
+          RG_NAME="rg-test-dev-infra"
+          RG_ID="/subscriptions/$SUB_ID/resourceGroups/$RG_NAME"
+          
+          VNET_NAME="vnet-test-dev"
+          VNET_ID="$RG_ID/providers/Microsoft.Network/virtualNetworks/$VNET_NAME"
+          
+          SNET_NAME="snet-test-dev"
+          SNET_ID="$VNET_ID/subnets/$SNET_NAME"
+          
+          NSG_NAME="nsg-test-dev"
+          NSG_ID="$RG_ID/providers/Microsoft.Network/networkSecurityGroups/$NSG_NAME"
+          
+          echo "Syncing Resource Group $RG_NAME..."
+          if az group show --name $RG_NAME &>/dev/null; then
+             if ! terraform state list | grep -q "module.resource_group.azurerm_resource_group.rg"; then
+                 echo "Importing Resource Group into state..."
+                 terraform import module.resource_group.azurerm_resource_group.rg $RG_ID
+             fi
+          fi
+          
+          echo "Syncing VNET $VNET_NAME..."
+          if az network vnet show --name $VNET_NAME --resource-group $RG_NAME &>/dev/null; then
+             if ! terraform state list | grep -q "module.vnet.azurerm_virtual_network.vnet"; then
+                 echo "Importing VNET into state..."
+                 terraform import module.vnet.azurerm_virtual_network.vnet $VNET_ID
+             fi
+          fi
+          
+          echo "Syncing Subnet $SNET_NAME..."
+          if az network vnet subnet show --name $SNET_NAME --vnet-name $VNET_NAME --resource-group $RG_NAME &>/dev/null; then
+             if ! terraform state list | grep -q "module.subnet.azurerm_subnet.subnet"; then
+                 echo "Importing Subnet into state..."
+                 terraform import module.subnet.azurerm_subnet.subnet $SNET_ID
+             fi
+          fi
+          
+          echo "Syncing NSG $NSG_NAME..."
+          if az network nsg show --name $NSG_NAME --resource-group $RG_NAME &>/dev/null; then
+             if ! terraform state list | grep -q "module.nsg.azurerm_network_security_group.nsg"; then
+                 echo "Importing NSG into state..."
+                 terraform import module.nsg.azurerm_network_security_group.nsg $NSG_ID
+             fi
+          fi
+
       - name: Terraform Plan
         id: plan
         if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
