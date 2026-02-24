@@ -44,39 +44,27 @@ jobs:
         run: terraform fmt -check
         continue-on-error: true
 
-      - name: Azure CLI Login
-        uses: azure/login@v1
-        with:
-          creds: '{"clientId":"${{ secrets.AZURE_CLIENT_ID }}","clientSecret":"${{ secrets.AZURE_CLIENT_SECRET }}","subscriptionId":"${{ secrets.AZURE_SUBSCRIPTION_ID }}","tenantId":"${{ secrets.AZURE_TENANT_ID }}"}'
-
-      - name: Ensure Backend Storage Exists
+      - name: Deploy Bootstrap (Storage Backend)
         run: |
-          RESOURCE_GROUP_NAME="rg-terraform-state"
-          STORAGE_ACCOUNT_NAME="tfstatetestdev${{ github.run_id }}"
-          STORAGE_ACCOUNT_NAME=${STORAGE_ACCOUNT_NAME:0:24}
-          CONTAINER_NAME="tfstate"
-          LOCATION="southindia"
-
-          echo "Using Storage Account Name: $STORAGE_ACCOUNT_NAME"
-
-          if ! az storage account show --name $STORAGE_ACCOUNT_NAME --resource-group $RESOURCE_GROUP_NAME &>/dev/null; then
-            echo "Storage account not found. Creating..."
-            az group create --name $RESOURCE_GROUP_NAME --location "$LOCATION"
-            
-            # Create storage account
-            az storage account create --name $STORAGE_ACCOUNT_NAME --resource-group $RESOURCE_GROUP_NAME --location "$LOCATION" --sku Standard_LRS --allow-blob-public-access false
-            
-            # Wait for storage account to be fully provisioned
-            sleep 30
-            
-            # Create container
-            az storage container create --name $CONTAINER_NAME --account-name $STORAGE_ACCOUNT_NAME --auth-mode login
-          else
-            echo "Backend storage account already exists."
-          fi
-
-          # Update the backend.tf dynamically to match the newly generated unique storage account name
-          sed -i "s/storage_account_name = \".*\"/storage_account_name = \"$STORAGE_ACCOUNT_NAME\"/g" backend.tf
+          # The GitHub action runner can occasionally break parsing secrets if they contain trailing spaces or invisible characters from a UI copy/paste
+          # we sanitize these before passing them to terraform to avoid random 'SubscriptionNotFound' errors
+          export ARM_CLIENT_ID=$(echo -n "$ARM_CLIENT_ID" | tr -d '[:space:]"')
+          export ARM_CLIENT_SECRET=$(echo -n "$ARM_CLIENT_SECRET" | tr -d '[:space:]"')
+          export ARM_SUBSCRIPTION_ID=$(echo -n "$ARM_SUBSCRIPTION_ID" | tr -d '[:space:]"')
+          export ARM_TENANT_ID=$(echo -n "$ARM_TENANT_ID" | tr -d '[:space:]"')
+          
+          # Initialize and apply the bootstrap terraform code locally to create the backend storage
+          cd ../bootstrap
+          terraform init
+          terraform apply -auto-approve
+          
+          # Tell terraform to output the randomly generated storage account name and save it
+          SA_NAME=$(terraform output -raw storage_account_name)
+          echo "Determined Storage Account Name: $SA_NAME"
+          
+          # Navigate back to the main environment and inject the exact storage account name
+          cd ../dev
+          sed -i "s/storage_account_name = \".*\"/storage_account_name = \"$SA_NAME\"/g" backend.tf
 
       - name: Terraform Init
         id: init
