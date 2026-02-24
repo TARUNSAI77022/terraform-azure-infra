@@ -21,7 +21,7 @@ variable "subnet_id" {
 variable "size" {
   type        = string
   description = "VM size"
-  default     = "Standard_DS1_v2"
+  default     = "Standard_B2s"
 }
 
 variable "admin_username" {
