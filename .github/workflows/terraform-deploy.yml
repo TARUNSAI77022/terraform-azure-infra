@@ -99,7 +99,9 @@ jobs:
           if [ $(az group exists --name $INFRA_RG) == 'true' ]; then
             echo "Resource group $INFRA_RG exists. Force deleting to ensure a clean slate (this may take a few minutes)..."
             az group delete --name $INFRA_RG --yes
-            echo "Successfully deleted $INFRA_RG."
+            echo "Successfully initiated deletion of $INFRA_RG."
+            echo "Waiting 60 seconds to ensure Azure backend DNS and routing records are fully purged before recreating..."
+            sleep 60
           else
             echo "No existing infrastructure found. Starting fresh."
           fi
