@@ -84,14 +84,6 @@ jobs:
           # 3. Update Terraform backend configuration
           sed -i "s/storage_account_name = \".*\"/storage_account_name = \"$STORAGE_ACCOUNT_NAME\"/g" backend.tf
 
-      - name: Terraform Init
-        id: init
-        run: terraform init
-
-      - name: Terraform Validate
-        id: validate
-        run: terraform validate -no-color
-
       - name: Clean Slate (Force Delete Old Resources)
         run: |
           INFRA_RG="rg-test-dev-infra"
@@ -100,11 +92,34 @@ jobs:
             echo "Resource group $INFRA_RG exists. Force deleting to ensure a clean slate (this may take a few minutes)..."
             az group delete --name $INFRA_RG --yes
             echo "Successfully initiated deletion of $INFRA_RG."
-            echo "Waiting 60 seconds to ensure Azure backend DNS and routing records are fully purged before recreating..."
-            sleep 60
+            echo "Waiting to ensure Azure backend completely purges the VNET before recreating (can take up to 2m)..."
+            # Poll Azure until the VNET physically vanishes from its API
+            while az network vnet show --name vnet-test-dev --resource-group $INFRA_RG &>/dev/null; do
+                echo "VNET still terminating..."
+                sleep 15
+            done
+            sleep 20 # Give the API just a little extra breathing room
           else
             echo "No existing infrastructure found. Starting fresh."
           fi
+          
+          # We need to extract the STORAGE_ACCOUNT_NAME dynamically
+          SA_NAME=$(awk -F'"' '/storage_account_name/{print $2}' backend.tf)
+          
+          # HARD RESETS: Wipe any local or remote staler state
+          echo "Purging old terraform state residues..."
+          rm -rf .terraform .terraform.lock.hcl terraform.tfstate*
+          
+          # Brutally purge the remote state container to guarantee Terraforms memory is wiped
+          az storage blob delete-batch --source tfstate --account-name $SA_NAME --auth-mode login || true
+
+      - name: Terraform Init
+        id: init
+        run: terraform init
+
+      - name: Terraform Validate
+        id: validate
+        run: terraform validate -no-color
 
       - name: Terraform Plan
         id: plan
