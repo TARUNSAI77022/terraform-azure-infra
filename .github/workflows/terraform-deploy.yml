@@ -86,22 +86,22 @@ jobs:
 
       - name: Clean Slate (Force Delete Old Resources)
         run: |
-          INFRA_RG="rg-test-dev-infra"
-          echo "Checking if infrastructure resource group $INFRA_RG exists..."
-          if [ $(az group exists --name $INFRA_RG) == 'true' ]; then
-            echo "Resource group $INFRA_RG exists. Force deleting to ensure a clean slate (this may take a few minutes)..."
-            az group delete --name $INFRA_RG --yes
-            echo "Successfully initiated deletion of $INFRA_RG."
-            echo "Waiting to ensure Azure backend completely purges the VNET before recreating (can take up to 2m)..."
-            # Poll Azure until the VNET physically vanishes from its API
-            while az network vnet show --name vnet-test-dev --resource-group $INFRA_RG &>/dev/null; do
-                echo "VNET still terminating..."
-                sleep 15
-            done
-            sleep 20 # Give the API just a little extra breathing room
-          else
-            echo "No existing infrastructure found. Starting fresh."
-          fi
+          PREFIX="rg-test-dev-infra"
+          echo "Checking for old infrastructure resource groups matching prefix $PREFIX..."
+          OLD_RGS=$(az group list --query "[?starts_with(name, '$PREFIX')].name" -o tsv)
+          
+          for rg in $OLD_RGS; do
+            echo "Force deleting old resource group $rg asynchronously to ensure a clean slate..."
+            az group delete --name $rg --yes --no-wait
+          done
+          
+          # Create a unique resource group name for this run to avoid Azure tombstone/ghost-deletion bugs
+          NEW_RG="${PREFIX}-${{ github.run_id }}"
+          echo "Using new unique resource group for this deployment: $NEW_RG"
+          
+          # Update the terraform.tfvars file with the new resource group name
+          sed -i "s/resource_group_name = \".*\"/resource_group_name = \"$NEW_RG\"/g" terraform.tfvars
+
           
           # We need to extract the STORAGE_ACCOUNT_NAME dynamically
           SA_NAME=$(awk -F'"' '/storage_account_name/{print $2}' backend.tf)
