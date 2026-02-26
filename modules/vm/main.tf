@@ -3,7 +3,7 @@ resource "azurerm_public_ip" "pip" {
   resource_group_name = var.resource_group_name
   location            = var.location
   allocation_method   = "Static"
-  sku                 = "Standard"
+  sku                 = "Basic"
 }
 
 resource "azurerm_network_interface" "nic" {
@@ -21,14 +21,20 @@ resource "azurerm_network_interface" "nic" {
 
 resource "azurerm_linux_virtual_machine" "vm" {
   name                = var.name
+  computer_name       = var.name
   resource_group_name = var.resource_group_name
   location            = var.location
-  size                = var.size
-  admin_username      = var.admin_username
-  custom_data         = var.custom_data
+
+  # Best VM size for Azure Free Trial
+  size = "Standard_B1s"
+
+  admin_username = var.admin_username
+  custom_data    = var.custom_data
+
+  disable_password_authentication = true
 
   network_interface_ids = [
-    azurerm_network_interface.nic.id,
+    azurerm_network_interface.nic.id
   ]
 
   admin_ssh_key {
@@ -38,7 +44,7 @@ resource "azurerm_linux_virtual_machine" "vm" {
 
   os_disk {
     caching              = "ReadWrite"
-    storage_account_type = "Premium_LRS"
+    storage_account_type = "Standard_LRS"
     disk_size_gb         = 64
   }
 

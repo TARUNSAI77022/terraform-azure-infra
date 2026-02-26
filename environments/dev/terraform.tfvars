@@ -1,0 +1,5 @@
+name                = "vm-test-dev"
+resource_group_name = "rg-test-dev-infra"
+location            = "eastus2"
+admin_username      = "azureuser"
+size                = "Standard_B1s"
