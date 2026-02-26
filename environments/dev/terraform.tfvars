@@ -1,5 +1,5 @@
 prefix              = "myapp3tier"
-location            = "eastus2"
+location            = "centralus"
 admin_username      = "azureadmin"
 admin_password      = "Password1234!"
 resource_group_name = "rg-test-dev-infra"

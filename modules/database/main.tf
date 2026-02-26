@@ -19,10 +19,11 @@ resource "azurerm_mssql_server" "sql_server" {
 }
 
 resource "azurerm_mssql_database" "sql_db" {
-  name        = "${var.prefix}-sqldb"
-  server_id   = azurerm_mssql_server.sql_server.id
-  sku_name    = "S0"
-  max_size_gb = 250
+  name                                  = "${var.prefix}-sqldb"
+  server_id                             = azurerm_mssql_server.sql_server.id
+  sku_name                              = "S0"
+  max_size_gb                           = 250
+  transparent_data_encryption_enabled   = true
 }
 
 resource "azurerm_mssql_virtual_network_rule" "vnet_rule" {

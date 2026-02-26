@@ -22,7 +22,7 @@ resource "azurerm_linux_virtual_machine_scale_set" "web_vmss" {
   name                = "${var.prefix}-web-vmss"
   resource_group_name = var.resource_group_name
   location            = var.location
-  sku                 = "Standard_B1s"
+  sku                 = "Standard_DS1_v2"
   instances           = 1
   admin_username      = var.admin_username
   admin_password      = var.admin_password
@@ -56,7 +56,7 @@ resource "azurerm_linux_virtual_machine_scale_set" "app_vmss" {
   name                = "${var.prefix}-app-vmss"
   resource_group_name = var.resource_group_name
   location            = var.location
-  sku                 = "Standard_B1s"
+  sku                 = "Standard_DS1_v2"
   instances           = 1
   admin_username      = var.admin_username
   admin_password      = var.admin_password
