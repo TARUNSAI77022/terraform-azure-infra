@@ -3,7 +3,7 @@ resource "azurerm_public_ip" "pip" {
   resource_group_name = var.resource_group_name
   location            = var.location
   allocation_method   = "Static"
-  sku                 = "Basic"
+  sku                 = "Standard"
 }
 
 resource "azurerm_network_interface" "nic" {
@@ -26,7 +26,7 @@ resource "azurerm_linux_virtual_machine" "vm" {
   location            = var.location
 
   # Best VM size for Azure Free Trial
-  size = "Standard_B1s"
+  size = var.size
 
   admin_username = var.admin_username
   custom_data    = var.custom_data

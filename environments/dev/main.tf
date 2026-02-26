@@ -23,8 +23,8 @@ resource "tls_private_key" "vm_ssh" {
 
 module "resource_group" {
   source   = "../../modules/resource-group"
-  name     = "rg-test-dev-infra"
-  location = "East US"
+  name     = var.resource_group_name
+  location = var.location
 }
 
 module "vnet" {
@@ -104,11 +104,12 @@ resource "azurerm_subnet_network_security_group_association" "nsg_assoc" {
 
 module "vm" {
   source              = "../../modules/vm"
-  name                = "vm-test-dev"
+  name                = var.name
   resource_group_name = module.resource_group.name
   location            = module.resource_group.location
   subnet_id           = module.subnet.id
-  admin_username      = "adminuser"
+  size                = var.size
+  admin_username      = var.admin_username
   admin_public_key    = tls_private_key.vm_ssh.public_key_openssh
   custom_data         = filebase64("../../scripts/install_tools.sh")
 }
