@@ -110,12 +110,14 @@ jobs:
           echo "Purging old terraform state residues..."
           rm -rf .terraform .terraform.lock.hcl terraform.tfstate*
           
-          echo "Breaking any blob leases to ensure we can delete the state file..."
-          az storage blob lease break --blob-name "terraform.tfstate" --container-name tfstate --account-name $SA_NAME --auth-mode login || true
+          echo "Force-deleting the entire remote state container to bypass lease locks..."
+          az storage container delete --name tfstate --account-name $SA_NAME --auth-mode login --yes || true
           
-          # Brutally purge the remote state container to guarantee Terraforms memory is wiped
-          echo "Deleting state blobs..."
-          az storage blob delete-batch --source tfstate --account-name $SA_NAME --auth-mode login || true
+          # Wait a few seconds for Azure to finalize container deletion
+          sleep 10
+          
+          echo "Recreating clean remote state container..."
+          az storage container create --name tfstate --account-name $SA_NAME --auth-mode login || true
 
       - name: Terraform Init
         id: init
