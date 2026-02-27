@@ -84,24 +84,24 @@ jobs:
           # 3. Update Terraform backend configuration
           sed -i "s/storage_account_name = \".*\"/storage_account_name = \"$STORAGE_ACCOUNT_NAME\"/g" backend.tf
 
-      - name: Clean Slate (Force Delete Old Resources)
+      - name: Clean Slate (Delete Old Resources)
         run: |
-          PREFIX="rg-test-dev-infra"
-          echo "Checking for old infrastructure resource groups matching prefix $PREFIX..."
-          OLD_RGS=$(az group list --query "[?starts_with(name, '$PREFIX')].name" -o tsv)
+          RG_NAME="rg-test-dev-infra"
+          VNET_NAME="myapp3tier-vnet"
           
-          for rg in $OLD_RGS; do
-            echo "Force deleting old resource group $rg asynchronously to ensure a clean slate..."
-            az group delete --name $rg --yes --no-wait
-          done
+          echo "Checking if VNet $VNET_NAME exists in $RG_NAME..."
+          if az network vnet show --name $VNET_NAME --resource-group $RG_NAME &> /dev/null; then
+            echo "VNet $VNET_NAME exists. Deleting the entire resource group to cleanly wipe all old resources (VPC, Subnets, VMs, DBs)..."
+            az group delete --name $RG_NAME --yes
+          else
+            echo "VNet $VNET_NAME does not exist. Proceeding."
+          fi
           
-          # Create a unique resource group name for this run to avoid Azure tombstone/ghost-deletion bugs
-          NEW_RG="${PREFIX}-${{ github.run_id }}"
-          echo "Using new unique resource group for this deployment: $NEW_RG"
+          echo "Creating/Ensuring Resource Group $RG_NAME exists for the new deployment..."
+          az group create --name $RG_NAME --location "centralus"
           
-          # Update the terraform.tfvars file with the new resource group name
-          sed -i "s/resource_group_name = \".*\"/resource_group_name = \"$NEW_RG\"/g" terraform.tfvars
-
+          # Ensure terraform.tfvars has the right static rg name and location
+          sed -i "s/resource_group_name = \".*\"/resource_group_name = \"$RG_NAME\"/g" terraform.tfvars
           
           # We need to extract the STORAGE_ACCOUNT_NAME dynamically
           SA_NAME=$(awk -F'"' '/storage_account_name/{print $2}' backend.tf)
